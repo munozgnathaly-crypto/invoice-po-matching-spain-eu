@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- FICTITIOUS SAMPLE for testing. Companies and tax IDs are invented. Not signed. -->
+<fe:Facturae xmlns:fe="http://www.facturae.gob.es/formato/Versiones/Facturaev3_2_2.xml" xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+  <FileHeader>
+    <SchemaVersion>3.2.2</SchemaVersion>
+    <Modality>I</Modality>
+    <InvoiceIssuerType>EM</InvoiceIssuerType>
+    <Batch>
+      <BatchIdentifier>B12345674A-2026-0457</BatchIdentifier>
+      <InvoicesCount>1</InvoicesCount>
+      <TotalInvoicesAmount><TotalAmount>1210.00</TotalAmount></TotalInvoicesAmount>
+      <TotalOutstandingAmount><TotalAmount>1060.00</TotalAmount></TotalOutstandingAmount>
+      <TotalExecutableAmount><TotalAmount>1060.00</TotalAmount></TotalExecutableAmount>
+      <InvoiceCurrencyCode>EUR</InvoiceCurrencyCode>
+    </Batch>
+  </FileHeader>
+  <Parties>
+    <SellerParty>
+      <TaxIdentification>
+        <PersonTypeCode>J</PersonTypeCode>
+        <ResidenceTypeCode>R</ResidenceTypeCode>
+        <TaxIdentificationNumber>ESB12345674</TaxIdentificationNumber>
+      </TaxIdentification>
+      <LegalEntity>
+        <CorporateName>Suministros Ejemplo SL</CorporateName>
+        <AddressInSpain><Address>Calle Falsa 1</Address><PostCode>47001</PostCode><Town>Valladolid</Town><Province>Valladolid</Province><CountryCode>ESP</CountryCode></AddressInSpain>
+      </LegalEntity>
+    </SellerParty>
+    <BuyerParty>
+      <TaxIdentification>
+        <PersonTypeCode>J</PersonTypeCode>
+        <ResidenceTypeCode>R</ResidenceTypeCode>
+        <TaxIdentificationNumber>ESB76543214</TaxIdentificationNumber>
+      </TaxIdentification>
+      <LegalEntity>
+        <CorporateName>Empresa Demo SL</CorporateName>
+        <AddressInSpain><Address>Avenida Ejemplo 2</Address><PostCode>28001</PostCode><Town>Madrid</Town><Province>Madrid</Province><CountryCode>ESP</CountryCode></AddressInSpain>
+      </LegalEntity>
+    </BuyerParty>
+  </Parties>
+  <Invoices>
+    <Invoice>
+      <InvoiceHeader>
+        <InvoiceNumber>0457</InvoiceNumber>
+        <InvoiceSeriesCode>A2026</InvoiceSeriesCode>
+        <InvoiceDocumentType>FC</InvoiceDocumentType>
+        <InvoiceClass>OO</InvoiceClass>
+      </InvoiceHeader>
+      <InvoiceIssueData>
+        <IssueDate>2026-11-20</IssueDate>
+        <InvoiceCurrencyCode>EUR</InvoiceCurrencyCode>
+        <TaxCurrencyCode>EUR</TaxCurrencyCode>
+        <LanguageName>es</LanguageName>
+      </InvoiceIssueData>
+      <TaxesOutputs>
+        <Tax>
+          <TaxTypeCode>01</TaxTypeCode>
+          <TaxRate>21.00</TaxRate>
+          <TaxableBase><TotalAmount>1000.00</TotalAmount></TaxableBase>
+          <TaxAmount><TotalAmount>210.00</TotalAmount></TaxAmount>
+        </Tax>
+      </TaxesOutputs>
+      <TaxesWithheld>
+        <Tax>
+          <TaxTypeCode>04</TaxTypeCode>
+          <TaxRate>15.00</TaxRate>
+          <TaxableBase><TotalAmount>1000.00</TotalAmount></TaxableBase>
+          <TaxAmount><TotalAmount>150.00</TotalAmount></TaxAmount>
+        </Tax>
+      </TaxesWithheld>
+      <InvoiceTotals>
+        <TotalGrossAmount>1000.00</TotalGrossAmount>
+        <TotalGrossAmountBeforeTaxes>1000.00</TotalGrossAmountBeforeTaxes>
+        <TotalTaxOutputs>210.00</TotalTaxOutputs>
+        <TotalTaxesWithheld>150.00</TotalTaxesWithheld>
+        <InvoiceTotal>1060.00</InvoiceTotal>
+        <TotalOutstandingAmount>1060.00</TotalOutstandingAmount>
+        <TotalExecutableAmount>1060.00</TotalExecutableAmount>
+      </InvoiceTotals>
+      <Items>
+        <InvoiceLine>
+          <ReceiverTransactionReference>PO-2026-001</ReceiverTransactionReference>
+          <ItemDescription>Servicio de consultoría noviembre</ItemDescription>
+          <Quantity>1</Quantity>
+          <UnitOfMeasure>01</UnitOfMeasure>
+          <UnitPriceWithoutTax>1000.00</UnitPriceWithoutTax>
+          <TotalCost>1000.00</TotalCost>
+          <GrossAmount>1000.00</GrossAmount>
+          <TaxesOutputs><Tax><TaxTypeCode>01</TaxTypeCode><TaxRate>21.00</TaxRate><TaxableBase><TotalAmount>1000.00</TotalAmount></TaxableBase><TaxAmount><TotalAmount>210.00</TotalAmount></TaxAmount></Tax></TaxesOutputs>
+        </InvoiceLine>
+      </Items>
+      <PaymentDetails>
+        <Installment>
+          <InstallmentDueDate>2026-12-20</InstallmentDueDate>
+          <InstallmentAmount>1060.00</InstallmentAmount>
+          <PaymentMeans>04</PaymentMeans>
+        </Installment>
+      </PaymentDetails>
+    </Invoice>
+  </Invoices>
+</fe:Facturae>

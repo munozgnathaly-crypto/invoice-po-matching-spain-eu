@@ -1,0 +1,54 @@
+{
+  "name": "Invoice–PO Matching – Error Alerts",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "8776d634-3429-4039-a21f-473c0d037466",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "#finance"
+        },
+        "text": "={{ ':rotating_light: *Workflow error* in ' + $json.workflow.name + '\\n*Node:* ' + ($json.execution.lastNodeExecuted || 'unknown') + '\\n*Error:* ' + ($json.execution.error ? $json.execution.error.message : 'unknown') + '\\n' + ($json.execution.url || '') }}",
+        "otherOptions": {}
+      },
+      "id": "ec08fa86-144e-4f9f-8c8d-c9e0fc2d094f",
+      "name": "Post Error to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        240,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Post Error to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

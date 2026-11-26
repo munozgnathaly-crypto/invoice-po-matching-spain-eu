@@ -1,0 +1,587 @@
+{
+  "name": "Invoice–PO Matching (Spain / EU)",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "simple": false,
+        "filters": {
+          "q": "has:attachment (filename:pdf OR filename:xml)",
+          "readStatus": "unread"
+        },
+        "options": {
+          "downloadAttachments": true
+        }
+      },
+      "id": "3f7b3871-c269-48ab-acfb-aa151f5abe33",
+      "name": "Gmail Trigger",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// One output item per PDF or XML attachment in each email.\n// The file is passed on as binary property \"data\".\nconst out = [];\nfor (const item of $input.all()) {\n  const bin = item.binary || {};\n  const from = item.json.from;\n  const fromAddress =\n    (from && from.value && from.value[0] && from.value[0].address) ||\n    (typeof from === 'string' ? from : '');\n  for (const b of Object.values(bin)) {\n    const name = (b.fileName || '').toLowerCase();\n    const mime = (b.mimeType || '').toLowerCase();\n    const isXml = name.endsWith('.xml') || name.endsWith('.xsig') || mime.includes('xml');\n    const isPdf = name.endsWith('.pdf') || mime === 'application/pdf';\n    if (!isXml && !isPdf) continue;\n    out.push({\n      json: {\n        messageId: item.json.id,\n        emailFrom: fromAddress,\n        emailSubject: item.json.subject || '',\n        fileName: b.fileName || '',\n        invoiceType: isXml ? 'XML' : 'PDF',\n      },\n      binary: { data: b },\n    });\n  }\n}\nreturn out;\n"
+      },
+      "id": "71be9bfb-835d-45d0-b751-3d66252acbb2",
+      "name": "Detect Attachments",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "456c73b5-13c9-4539-8979-34cb60ac970f",
+              "leftValue": "={{ $json.invoiceType }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "rightValue": "XML"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "7e4dc10f-0a5a-4791-b169-15b9018709c1",
+      "name": "Is XML?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "text",
+        "binaryPropertyName": "data",
+        "destinationKey": "data",
+        "options": {}
+      },
+      "id": "d2632ddd-606f-477b-8eb5-57ca106398a6",
+      "name": "Extract XML Text",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        660,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "data",
+        "options": {}
+      },
+      "id": "3fb76367-d076-4705-92de-2c911f898170",
+      "name": "Extract PDF Text",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        660,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "text": "={{ $json.text }}",
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"supplier_name\": {\n      \"type\": \"string\",\n      \"description\": \"Issuer company or person name\"\n    },\n    \"supplier_nif\": {\n      \"type\": \"string\",\n      \"description\": \"Issuer NIF/CIF/NIE, or EU VAT number with country prefix\"\n    },\n    \"customer_nif\": {\n      \"type\": \"string\",\n      \"description\": \"Recipient NIF/CIF as printed on the invoice\"\n    },\n    \"invoice_series_number\": {\n      \"type\": \"string\",\n      \"description\": \"Series and invoice number exactly as printed\"\n    },\n    \"issue_date\": {\n      \"type\": \"string\",\n      \"description\": \"Fecha de expedición, format YYYY-MM-DD\"\n    },\n    \"due_date\": {\n      \"type\": \"string\",\n      \"description\": \"Fecha de vencimiento YYYY-MM-DD, empty string if not printed\"\n    },\n    \"po_number\": {\n      \"type\": \"string\",\n      \"description\": \"Purchase order / pedido reference, empty string if none\"\n    },\n    \"vat_lines\": {\n      \"type\": \"array\",\n      \"description\": \"One entry per VAT rate (desglose de IVA)\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"rate\": {\n            \"type\": \"number\",\n            \"description\": \"VAT rate in %, e.g. 21\"\n          },\n          \"base\": {\n            \"type\": \"number\",\n            \"description\": \"Base imponible for this rate\"\n          },\n          \"amount\": {\n            \"type\": \"number\",\n            \"description\": \"Cuota de IVA for this rate\"\n          }\n        }\n      }\n    },\n    \"equivalence_surcharge\": {\n      \"type\": \"number\",\n      \"description\": \"Recargo de equivalencia total, 0 if none\"\n    },\n    \"irpf_withholding\": {\n      \"type\": \"number\",\n      \"description\": \"Retención de IRPF amount, 0 if none\"\n    },\n    \"total\": {\n      \"type\": \"number\",\n      \"description\": \"Total factura (amount to pay)\"\n    },\n    \"verifactu_qr_present\": {\n      \"type\": \"boolean\",\n      \"description\": \"true only if a VERI*FACTU QR code or legend is visible\"\n    }\n  },\n  \"required\": [\n    \"supplier_name\",\n    \"supplier_nif\",\n    \"invoice_series_number\",\n    \"issue_date\",\n    \"vat_lines\",\n    \"total\"\n  ]\n}",
+        "options": {
+          "systemPromptTemplate": "You read the text of Spanish and EU supplier invoices and return the requested fields.\nRules:\n- Never invent values. If a field is not printed on the invoice, return an empty string (text) or 0 (amounts).\n- Amounts in the source use a comma as decimal separator (1.234,56). Return plain numbers with a dot (1234.56).\n- Dates in the source are usually DD/MM/YYYY. Return YYYY-MM-DD.\n- Return one vat_lines entry per VAT rate shown in the tax breakdown.\n- irpf_withholding is the amount withheld (retención), as a positive number.\n- Copy tax IDs exactly as printed; do not correct them."
+        }
+      },
+      "id": "7f9d0cb9-ea33-4d18-8025-3658d3c32e05",
+      "name": "Extract Invoice Data (AI)",
+      "type": "@n8n/n8n-nodes-langchain.informationExtractor",
+      "typeVersion": 1,
+      "position": [
+        880,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-4-5-20250929",
+          "cachedResultName": "Claude Sonnet 4.5"
+        },
+        "options": {
+          "temperature": 0
+        }
+      },
+      "id": "c32f7437-a8b3-44bc-bb3a-8c62cfa7c6a7",
+      "name": "Anthropic Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        880,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// ===================== CONFIG =====================\nconst OUR_NIF = 'B00000000';      // <-- your company NIF/CIF (with or without \"ES\")\nconst DEFAULT_PAYMENT_DAYS = 30;  // used when the invoice has no due date\nconst TOTAL_TOLERANCE = 0.02;     // € allowed between calculated and stated total\n// ==================================================\n\nconst src = $('Detect Attachments').item.json;\nconst j = $input.item.json;\n\n// ---------- helpers ----------\nconst toNum = (v) => {\n  if (v === null || v === undefined || v === '') return 0;\n  if (typeof v === 'number') return v;\n  if (typeof v === 'object' && v._ !== undefined) v = v._;\n  let s = String(v).replace(/[€\\s%]/g, '');\n  if (s.includes(',') && s.includes('.')) {\n    s = s.lastIndexOf(',') > s.lastIndexOf('.')\n      ? s.replace(/\\./g, '').replace(',', '.')   // 1.234,56\n      : s.replace(/,/g, '');                      // 1,234.56\n  } else if (s.includes(',')) {\n    s = s.replace(',', '.');                      // 1234,56\n  }\n  const n = parseFloat(s);\n  return isNaN(n) ? 0 : n;\n};\nconst r2 = (n) => Math.round(n * 100) / 100;\nconst text = (v) => (v === null || v === undefined) ? '' : (typeof v === 'object' ? String(v._ ?? '') : String(v)).trim();\nconst cleanId = (v) => text(v).toUpperCase().replace(/[\\s.\\-\\/]/g, '');\nconst arr = (v) => (v === undefined || v === null) ? [] : (Array.isArray(v) ? v : [v]);\nconst get = (o, path) => path.split('.').reduce((a, k) => {\n  if (a === null || a === undefined) return undefined;\n  if (Array.isArray(a)) a = a[0];\n  return a[k];\n}, o);\n// remove XML namespace prefixes: \"fe:Facturae\" -> \"Facturae\", \"cbc:ID\" -> \"ID\"\nconst strip = (o) => Array.isArray(o) ? o.map(strip)\n  : (o && typeof o === 'object')\n    ? Object.fromEntries(Object.entries(o).map(([k, v]) => [k.includes(':') ? k.split(':').pop() : k, strip(v)]))\n    : o;\nconst isoDate = (v) => {\n  const s = text(v);\n  if (!s) return '';\n  let m = s.match(/^(\\d{4})-(\\d{2})-(\\d{2})/);\n  if (m) return `${m[1]}-${m[2]}-${m[3]}`;\n  m = s.match(/^(\\d{1,2})[\\/.\\-](\\d{1,2})[\\/.\\-](\\d{4})$/);   // DD/MM/YYYY (Spanish)\n  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;\n  return '';\n};\n\n\n// small XML reader (no external libraries in the n8n Code node)\nconst decode = (s) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '\"').replace(/&apos;/g, \"'\").replace(/&amp;/g, '&');\nfunction parseXml(xml) {\n  xml = String(xml).replace(/^﻿/, '').replace(/<\\?[\\s\\S]*?\\?>/g, '').replace(/<!--[\\s\\S]*?-->/g, '').replace(/<!DOCTYPE[\\s\\S]*?>/gi, '');\n  const root = {};\n  const stack = [{ name: '#root', obj: root, text: '' }];\n  const add = (parent, name, val) => {\n    if (parent[name] === undefined) parent[name] = val;\n    else { if (!Array.isArray(parent[name])) parent[name] = [parent[name]]; parent[name].push(val); }\n  };\n  const re = /<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>|<\\/([^\\s>]+)\\s*>|<([^\\s\\/>!]+)([^>]*?)(\\/?)>|([^<]+)/g;\n  let m;\n  while ((m = re.exec(xml))) {\n    const top = stack[stack.length - 1];\n    if (m[1] !== undefined) top.text += m[1];\n    else if (m[2]) {\n      if (stack.length < 2) break;\n      const n = stack.pop();\n      add(stack[stack.length - 1].obj, n.name, Object.keys(n.obj).length ? n.obj : decode(n.text.trim()));\n    } else if (m[3]) {\n      if (m[5] === '/') add(top.obj, m[3], '');\n      else stack.push({ name: m[3], obj: {}, text: '' });\n    } else if (m[6]) top.text += m[6];\n  }\n  return root;\n}\n\n// ---------- Spanish NIF / NIE / CIF and EU VAT ----------\nconst DNI_LETTERS = 'TRWAGMYFPDXBNJZSQVHLCKE';\nfunction checkTaxId(raw) {\n  let id = cleanId(raw);\n  if (!id) return { valid: false, kind: 'empty', note: 'No tax ID found' };\n  if (id.startsWith('ES')) id = id.slice(2);\n  if (/^\\d{8}[A-Z]$/.test(id)) {                                   // DNI\n    const ok = DNI_LETTERS[parseInt(id.slice(0, 8), 10) % 23] === id[8];\n    return { valid: ok, kind: 'NIF (DNI)', note: ok ? '' : 'Wrong NIF control letter' };\n  }\n  if (/^[XYZ]\\d{7}[A-Z]$/.test(id)) {                              // NIE\n    const num = 'XYZ'.indexOf(id[0]) + id.slice(1, 8);\n    const ok = DNI_LETTERS[parseInt(num, 10) % 23] === id[8];\n    return { valid: ok, kind: 'NIE', note: ok ? '' : 'Wrong NIE control letter' };\n  }\n  if (/^[ABCDEFGHJNPQRSUVW]\\d{7}[0-9A-J]$/.test(id)) {             // CIF\n    const d = id.slice(1, 8);\n    let sum = 0;\n    for (let i = 0; i < 7; i++) {\n      let n = parseInt(d[i], 10);\n      if (i % 2 === 0) { n *= 2; n = Math.floor(n / 10) + (n % 10); }\n      sum += n;\n    }\n    const digit = (10 - (sum % 10)) % 10;\n    const letter = 'JABCDEFGHI'[digit];\n    const ctrl = id[8];\n    let ok;\n    if ('PQRSNW'.includes(id[0])) ok = ctrl === letter;            // letter control only\n    else if ('ABEH'.includes(id[0])) ok = ctrl === String(digit);  // digit control only\n    else ok = ctrl === letter || ctrl === String(digit);\n    return { valid: ok, kind: 'CIF', note: ok ? '' : 'Wrong CIF control character' };\n  }\n  const eu = /^(AT|BE|BG|CY|CZ|DE|DK|EE|EL|FI|FR|HR|HU|IE|IT|LT|LU|LV|MT|NL|PL|PT|RO|SE|SI|SK|XI)[0-9A-Z]{2,13}$/;\n  if (eu.test(cleanId(raw))) {\n    return { valid: true, kind: 'EU VAT (format only)', note: 'EU VAT number: format checked only, confirm in VIES' };\n  }\n  return { valid: false, kind: 'unknown', note: 'Tax ID format not recognised' };\n}\n\n// ---------- read the invoice ----------\nlet inv;\nif (j.output) {\n  // PDF path: data comes from the Information Extractor (AI)\n  const o = j.output;\n  inv = {\n    source: 'PDF (AI extraction)',\n    supplier_name: text(o.supplier_name),\n    supplier_nif: o.supplier_nif,\n    customer_nif: o.customer_nif,\n    invoice_number: text(o.invoice_series_number),\n    issue_date: o.issue_date,\n    due_date: o.due_date,\n    po_number: text(o.po_number),\n    vat_lines: arr(o.vat_lines).map((l) => ({ rate: toNum(l.rate), base: toNum(l.base), amount: toNum(l.amount) })),\n    surcharge: toNum(o.equivalence_surcharge),\n    irpf: toNum(o.irpf_withholding),\n    total: toNum(o.total),\n    verifactu_qr: o.verifactu_qr_present === true,\n  };\n} else {\n  // XML path: Facturae (Spain) or UBL (EU / Peppol)\n  const x = strip(typeof j.data === 'string' ? parseXml(j.data) : j);\n  const fe = x.Facturae;\n  const ubl = x.Invoice;\n  if (fe) {\n    const seller = get(fe, 'Parties.SellerParty');\n    const buyer = get(fe, 'Parties.BuyerParty');\n    const invc = arr(get(fe, 'Invoices.Invoice'))[0] || {};\n    const taxes = arr(get(invc, 'TaxesOutputs.Tax'));\n    const lines = arr(get(invc, 'Items.InvoiceLine'));\n    const po = lines.map((l) => text(l.ReceiverTransactionReference) || text(l.ReceiverContractReference)).find(Boolean) || '';\n    inv = {\n      source: 'XML (Facturae)',\n      supplier_name: text(get(seller, 'LegalEntity.CorporateName')) ||\n        [get(seller, 'Individual.Name'), get(seller, 'Individual.FirstSurname')].map(text).filter(Boolean).join(' '),\n      supplier_nif: get(seller, 'TaxIdentification.TaxIdentificationNumber'),\n      customer_nif: get(buyer, 'TaxIdentification.TaxIdentificationNumber'),\n      invoice_number: [get(invc, 'InvoiceHeader.InvoiceSeriesCode'), get(invc, 'InvoiceHeader.InvoiceNumber')].map(text).filter(Boolean).join('-'),\n      issue_date: get(invc, 'InvoiceIssueData.IssueDate'),\n      due_date: get(invc, 'PaymentDetails.Installment.InstallmentDueDate'),\n      po_number: po,\n      vat_lines: taxes.map((t) => ({\n        rate: toNum(t.TaxRate),\n        base: toNum(get(t, 'TaxableBase.TotalAmount')),\n        amount: toNum(get(t, 'TaxAmount.TotalAmount')),\n      })),\n      surcharge: taxes.reduce((s, t) => s + toNum(get(t, 'EquivalenceSurchargeAmount.TotalAmount')), 0),\n      irpf: toNum(get(invc, 'InvoiceTotals.TotalTaxesWithheld')),\n      total: toNum(get(invc, 'InvoiceTotals.InvoiceTotal')),\n      verifactu_qr: false,\n    };\n  } else if (ubl) {\n    const sp = get(ubl, 'AccountingSupplierParty.Party');\n    const cp = get(ubl, 'AccountingCustomerParty.Party');\n    const subs = arr(ubl.TaxTotal).flatMap((t) => arr(t.TaxSubtotal));\n    const irpf = arr(ubl.WithholdingTaxTotal).reduce((s, t) => s + toNum(t.TaxAmount), 0);\n    const payable = toNum(get(ubl, 'LegalMonetaryTotal.PayableAmount'));\n    const inclusive = toNum(get(ubl, 'LegalMonetaryTotal.TaxInclusiveAmount'));\n    inv = {\n      source: 'XML (UBL)',\n      supplier_name: text(get(sp, 'PartyLegalEntity.RegistrationName')) || text(get(sp, 'PartyName.Name')),\n      supplier_nif: get(sp, 'PartyTaxScheme.CompanyID') || get(sp, 'PartyLegalEntity.CompanyID'),\n      customer_nif: get(cp, 'PartyTaxScheme.CompanyID') || get(cp, 'PartyLegalEntity.CompanyID'),\n      invoice_number: text(ubl.ID),\n      issue_date: ubl.IssueDate,\n      due_date: ubl.DueDate || get(ubl, 'PaymentMeans.PaymentDueDate'),\n      po_number: text(get(ubl, 'OrderReference.ID')),\n      vat_lines: subs.map((s) => ({\n        rate: toNum(get(s, 'TaxCategory.Percent')),\n        base: toNum(s.TaxableAmount),\n        amount: toNum(s.TaxAmount),\n      })),\n      surcharge: 0,\n      irpf,\n      total: payable || r2(inclusive - irpf),\n      verifactu_qr: false,\n    };\n  } else {\n    inv = { source: 'XML (format not recognised)', vat_lines: [], total: 0 };\n  }\n}\n\n// ---------- checks ----------\nconst reasons = [];\nconst tax_base = r2(inv.vat_lines.reduce((s, l) => s + l.base, 0));\nconst vat_amount = r2(inv.vat_lines.reduce((s, l) => s + l.amount, 0));\nconst surcharge = r2(inv.surcharge || 0);\nconst irpf = r2(inv.irpf || 0);\nconst total = r2(inv.total || 0);\nconst calculated_total = r2(tax_base + vat_amount + surcharge - irpf);\nconst totals_valid = total > 0 && Math.abs(calculated_total - total) <= TOTAL_TOLERANCE;\nif (!totals_valid) reasons.push(`Totals do not add up: base ${tax_base} + VAT ${vat_amount} + surcharge ${surcharge} - IRPF ${irpf} = ${calculated_total} €, invoice says ${total} €`);\n\n// each VAT line: amount = base x rate (±0.02 €)\ninv.vat_lines.forEach((l) => {\n  if (Math.abs(r2(l.base * l.rate / 100) - l.amount) > TOTAL_TOLERANCE) {\n    reasons.push(`VAT line ${l.rate}% does not match: ${l.base} x ${l.rate}% ≠ ${l.amount} €`);\n  }\n});\n\nconst supplier = checkTaxId(inv.supplier_nif);\nif (!supplier.valid) reasons.push(`Supplier tax ID: ${supplier.note} (${text(inv.supplier_nif) || 'empty'})`);\n\nconst ourNif = cleanId(OUR_NIF).replace(/^ES/, '');\nconst customerNif = cleanId(inv.customer_nif).replace(/^ES/, '');\nconst customer_nif_valid = customerNif === ourNif;\nif (!customer_nif_valid) reasons.push(`Invoice is not addressed to our NIF (${ourNif}); found ${customerNif || 'none'}`);\n\nconst issue_date = isoDate(inv.issue_date);\nif (!issue_date) reasons.push('Issue date missing or unreadable');\nlet due_date = isoDate(inv.due_date);\nlet due_date_estimated = false;\nif (!due_date && issue_date) {\n  const d = new Date(issue_date + 'T00:00:00Z');\n  d.setUTCDate(d.getUTCDate() + DEFAULT_PAYMENT_DAYS);\n  due_date = d.toISOString().slice(0, 10);\n  due_date_estimated = true;\n}\nif (!text(inv.invoice_number)) reasons.push('Invoice number missing');\n\nconst vat_rates = inv.vat_lines.map((l) => l.rate);\n\nreturn {\n  json: {\n    messageId: src.messageId,\n    emailFrom: src.emailFrom,\n    emailSubject: src.emailSubject,\n    fileName: src.fileName,\n    source: inv.source,\n    supplier_name: text(inv.supplier_name),\n    supplier_nif: cleanId(inv.supplier_nif),\n    supplier_nif_type: supplier.kind,\n    supplier_nif_valid: supplier.valid,\n    customer_nif: customerNif,\n    customer_nif_valid,\n    invoice_number: text(inv.invoice_number),\n    issue_date,\n    due_date,\n    due_date_estimated,\n    po_number: text(inv.po_number),\n    tax_base,\n    vat_rates: vat_rates.join(' / '),\n    multi_vat: new Set(vat_rates).size > 1,\n    vat_amount,\n    surcharge,\n    irpf_withholding: irpf,\n    total,\n    calculated_total,\n    totals_valid,\n    verifactu_qr_present: inv.verifactu_qr === true,\n    check_reasons: reasons,\n  },\n};\n"
+      },
+      "id": "be26a332-11e5-432e-b467-1014cfc229c2",
+      "name": "Normalize & Validate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/PASTE_YOUR_SHEET_ID/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Purchase Orders"
+        },
+        "options": {}
+      },
+      "id": "afe2557f-44e5-4761-977f-e9e1d1a8e089",
+      "name": "Read Open Purchase Orders",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1340,
+        300
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// ===================== CONFIG =====================\n// Which invoice figure is compared with the PO \"Amount\" column:\n//   'tax_base' = amount before VAT (usual for purchase orders)\n//   'total'    = invoice total\nconst COMPARE_FIELD = 'tax_base';\nconst TOLERANCE_PCT = 0.01;   // 1 %\nconst TOLERANCE_MAX = 5;      // but never more than 5 €\n// ==================================================\n\nconst clean = (v) => String(v ?? '').toUpperCase().replace(/[\\s.\\-\\/]/g, '').replace(/^ES/, '');\nconst toNum = (v) => {\n  if (typeof v === 'number') return v;\n  let s = String(v ?? '').replace(/[€\\s]/g, '');\n  if (s.includes(',') && s.includes('.')) {\n    s = s.lastIndexOf(',') > s.lastIndexOf('.') ? s.replace(/\\./g, '').replace(',', '.') : s.replace(/,/g, '');\n  } else if (s.includes(',')) s = s.replace(',', '.');\n  const n = parseFloat(s);\n  return isNaN(n) ? 0 : n;\n};\nconst r2 = (n) => Math.round(n * 100) / 100;\n\n// Open purchase orders read from Google Sheets (columns: PO Number, Supplier NIF, Supplier Name, Amount, Status)\nconst pos = $('Read Open Purchase Orders').all()\n  .map((i) => i.json)\n  .filter((r) => r && r['PO Number'] !== undefined && String(r['Status'] ?? '').trim().toLowerCase() === 'open');\n\nconst invoices = $('Normalize & Validate').all();\n\nreturn invoices.map((item) => {\n  const inv = item.json;\n  const reasons = [...(inv.check_reasons || [])];\n  let po = null;\n  let lookup_method = '';\n\n  if (inv.po_number) {\n    po = pos.find((p) => clean(p['PO Number']) === clean(inv.po_number)) || null;\n    if (po) lookup_method = 'PO number';\n  }\n  if (!po) {\n    const bySupplier = pos.filter((p) => clean(p['Supplier NIF']) === clean(inv.supplier_nif));\n    if (bySupplier.length === 1) { po = bySupplier[0]; lookup_method = 'supplier NIF (only open PO)'; }\n    else if (bySupplier.length > 1) reasons.push(`Supplier has ${bySupplier.length} open POs and the invoice gives no PO number`);\n  }\n\n  let po_amount = 0, po_diff = 0, po_tolerance = 0, po_match = false;\n  if (po) {\n    po_amount = toNum(po['Amount']);\n    const invoiceAmount = toNum(inv[COMPARE_FIELD]);\n    po_tolerance = r2(Math.min(Math.abs(po_amount) * TOLERANCE_PCT, TOLERANCE_MAX));\n    po_diff = r2(invoiceAmount - po_amount);\n    po_match = Math.abs(po_diff) <= po_tolerance;\n    if (!po_match) reasons.push(`Invoice ${COMPARE_FIELD} ${invoiceAmount} € vs PO ${String(po['PO Number']).trim()} ${po_amount} € (difference ${po_diff} €, tolerance ±${po_tolerance} €)`);\n    if (clean(po['Supplier NIF']) && clean(po['Supplier NIF']) !== clean(inv.supplier_nif)) {\n      reasons.push(`PO ${String(po['PO Number']).trim()} belongs to supplier ${clean(po['Supplier NIF'])}, invoice is from ${inv.supplier_nif}`);\n      po_match = false;\n    }\n  } else if (!reasons.some((r) => r.includes('open POs'))) {\n    reasons.push(inv.po_number ? `PO ${inv.po_number} not found or not open` : 'No PO number and no single open PO for this supplier');\n  }\n\n  const notes = [];\n  if (inv.multi_vat) notes.push('Several VAT rates on this invoice');\n  if (inv.due_date_estimated) notes.push(`Due date estimated (issue date + default days)`);\n\n  const needs_review = reasons.length > 0;\n  return {\n    json: {\n      ...inv,\n      po_found: !!po,\n      po_number_matched: po ? String(po['PO Number']).trim() : '',\n      po_lookup_method: lookup_method,\n      po_amount,\n      po_difference: po_diff,\n      po_tolerance,\n      po_match,\n      needs_review,\n      review_reasons: reasons.join(' | '),\n      notes: notes.join(' | '),\n    },\n    pairedItem: { item: 0 },\n  };\n});\n"
+      },
+      "id": "aa874b51-20a3-4c14-bcc7-4c04d7fd2eb3",
+      "name": "Match Purchase Order",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "a079aee4-cf9b-44ae-adc8-f849763573a0",
+              "leftValue": "={{ $json.needs_review }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "05ee3bb7-5a30-42e2-ae3d-a1e7cf2d9ac0",
+      "name": "Needs Review?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Row for the \"Processed Invoices\" sheet (column names must match the sheet headers)\nconst i = $input.item.json;\nreturn {\n  json: {\n    'Processed At': new Date().toISOString(),\n    'Source': i.source,\n    'File': i.fileName,\n    'Supplier Name': i.supplier_name,\n    'Supplier NIF': i.supplier_nif,\n    'Invoice Number': i.invoice_number,\n    'Issue Date': i.issue_date,\n    'Due Date': i.due_date,\n    'Due Date Estimated': i.due_date_estimated ? 'Yes' : 'No',\n    'Tax Base': i.tax_base,\n    'VAT Rates': i.vat_rates,\n    'VAT Amount': i.vat_amount,\n    'Equivalence Surcharge': i.surcharge,\n    'IRPF Withholding': i.irpf_withholding,\n    'Total': i.total,\n    'PO Number': i.po_number_matched,\n    'PO Amount': i.po_amount,\n    'PO Lookup': i.po_lookup_method,\n    'Notes': i.notes,\n  },\n};\n"
+      },
+      "id": "8f7a4c8d-641b-41ba-ad30-6e78fac9b018",
+      "name": "Build Processed Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/PASTE_YOUR_SHEET_ID/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Processed Invoices"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "f378d5bb-7b14-4f3e-af66-64b779964894",
+      "name": "Append to Processed Invoices",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2220,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "mode": "list",
+          "value": "primary",
+          "cachedResultName": "primary"
+        },
+        "start": "={{ $('Match Purchase Order').item.json.due_date }}",
+        "end": "={{ DateTime.fromISO($('Match Purchase Order').item.json.due_date).plus({ days: 1 }).toISODate() }}",
+        "additionalFields": {
+          "allday": "yes",
+          "summary": "={{ 'Pago proveedor: ' + $('Match Purchase Order').item.json.supplier_name + ' – factura ' + $('Match Purchase Order').item.json.invoice_number + ' – ' + $('Match Purchase Order').item.json.total + ' €' }}",
+          "description": "={{ 'Proveedor: ' + $('Match Purchase Order').item.json.supplier_name + ' (' + $('Match Purchase Order').item.json.supplier_nif + ')\\nFactura: ' + $('Match Purchase Order').item.json.invoice_number + '\\nTotal: ' + $('Match Purchase Order').item.json.total + ' €\\nPedido: ' + $('Match Purchase Order').item.json.po_number_matched + '\\nVencimiento' + ($('Match Purchase Order').item.json.due_date_estimated ? ' (estimado)' : '') + ': ' + $('Match Purchase Order').item.json.due_date }}"
+        }
+      },
+      "id": "32fe7810-8bc9-407e-a97b-ba92adf855a3",
+      "name": "Payment Reminder",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        2440,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "#finance"
+        },
+        "text": "={{ ':warning: *Invoice needs review*\\n*Supplier:* ' + $json.supplier_name + ' (' + $json.supplier_nif + ')\\n*Invoice:* ' + $json.invoice_number + ' – ' + $json.total + ' €\\n*File:* ' + $json.fileName + ' (' + $json.source + ')\\n*Why:* ' + $json.review_reasons.split(' | ').join('\\n• ') }}",
+        "otherOptions": {}
+      },
+      "id": "1b5f0229-fa37-4ab1-ad7a-f2f23a56c434",
+      "name": "Post to Slack (Review)",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        2000,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Row for the \"Review\" sheet (column names must match the sheet headers)\nconst i = $('Match Purchase Order').item.json;\nreturn {\n  json: {\n    'Submitted At': new Date().toISOString(),\n    'Source': i.source,\n    'File': i.fileName,\n    'Email From': i.emailFrom,\n    'Supplier Name': i.supplier_name,\n    'Supplier NIF': i.supplier_nif,\n    'Invoice Number': i.invoice_number,\n    'Issue Date': i.issue_date,\n    'Total': i.total,\n    'PO Number (invoice)': i.po_number,\n    'Review Reasons': i.review_reasons,\n    'Notes': i.notes,\n  },\n};\n"
+      },
+      "id": "75d2b609-3c2a-4d3e-aa67-cb0e1fcca805",
+      "name": "Build Review Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2220,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/PASTE_YOUR_SHEET_ID/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Review"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "26ac8584-3af6-42c7-b522-733b1f77d54d",
+      "name": "Append to Review Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2440,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "markAsRead",
+        "messageId": "={{ $('Match Purchase Order').item.json.messageId }}"
+      },
+      "id": "62e4257c-abab-43be-ad18-ff008292a180",
+      "name": "Mark Email as Read",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2680,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Detect Attachments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Attachments": {
+      "main": [
+        [
+          {
+            "node": "Is XML?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is XML?": {
+      "main": [
+        [
+          {
+            "node": "Extract XML Text",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract PDF Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract XML Text": {
+      "main": [
+        [
+          {
+            "node": "Normalize & Validate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract PDF Text": {
+      "main": [
+        [
+          {
+            "node": "Extract Invoice Data (AI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Extract Invoice Data (AI)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Invoice Data (AI)": {
+      "main": [
+        [
+          {
+            "node": "Normalize & Validate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize & Validate": {
+      "main": [
+        [
+          {
+            "node": "Read Open Purchase Orders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Open Purchase Orders": {
+      "main": [
+        [
+          {
+            "node": "Match Purchase Order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Match Purchase Order": {
+      "main": [
+        [
+          {
+            "node": "Needs Review?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Review?": {
+      "main": [
+        [
+          {
+            "node": "Post to Slack (Review)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Processed Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to Slack (Review)": {
+      "main": [
+        [
+          {
+            "node": "Build Review Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Review Row": {
+      "main": [
+        [
+          {
+            "node": "Append to Review Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append to Review Sheet": {
+      "main": [
+        [
+          {
+            "node": "Mark Email as Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Processed Row": {
+      "main": [
+        [
+          {
+            "node": "Append to Processed Invoices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append to Processed Invoices": {
+      "main": [
+        [
+          {
+            "node": "Payment Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payment Reminder": {
+      "main": [
+        [
+          {
+            "node": "Mark Email as Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

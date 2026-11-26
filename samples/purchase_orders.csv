@@ -1,0 +1,5 @@
+PO Number,Supplier NIF,Supplier Name,Amount,Status
+PO-2026-001,B12345674,Suministros Ejemplo SL,1000.00,Open
+PO-2026-002,FR12345678901,Logiciels Exemple SARL,520.00,Open
+PO-2026-003,12345678Z,Juan Ejemplo Pérez (autónomo),300.00,Open
+PO-2026-004,B12345674,Suministros Ejemplo SL,750.00,Closed
